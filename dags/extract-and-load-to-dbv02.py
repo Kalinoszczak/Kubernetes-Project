@@ -79,7 +79,7 @@ def clear_table():
     conn_str = get_db_connection_string()
     engine = create_engine(conn_str)
     with engine.connect() as connection:
-        clear_table_query = "TRUNCATE TABLE transformed_data;"
+        clear_table_query = "DELETE TABLE transformed_data;"
         connection.execute(text(clear_table_query))
 
 def load_data_to_sql(**kwargs):
