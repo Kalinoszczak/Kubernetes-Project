@@ -63,7 +63,7 @@ def create_table_if_not_exists():
         with engine.connect() as connection:
             # Sprawdzanie istnienia tabeli
             check_table_query = """
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'transformed_data')
+            IF OBJECT_ID('transformed_data', 'U') IS NULL
             BEGIN
                 CREATE TABLE transformed_data (
                     [Index] INT PRIMARY KEY,
