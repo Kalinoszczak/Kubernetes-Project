@@ -59,7 +59,7 @@ def create_table_if_not_exists():
     engine = create_engine(conn_str)
     with engine.connect() as connection:
         create_table_query = """
-        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='transformed_data' AND xtype='U')
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='transformed_data' AND xtype='U')
         CREATE TABLE transformed_data (
             [Index] INT PRIMARY KEY,
             [Price] FLOAT,
