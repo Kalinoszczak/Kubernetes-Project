@@ -62,7 +62,7 @@ def extract_and_transform_data(**kwargs):
     kwargs['ti'].xcom_push(key='transformed_data', value=df_sorted.to_dict())
 
 def create_table_if_not_exists():
-    conn_str = f'mssql+pyodbc://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?driver=ODBC+Driver+17+for+SQL+Server'
+    conn_str = f'mssql+pyodbc://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?driver=ODBC+Driver+18+for+SQL+Server'
     engine = create_engine(conn_str)
     with engine.connect() as connection:
         create_table_query = """
@@ -83,7 +83,7 @@ def create_table_if_not_exists():
         connection.execute(text(create_table_query))
 
 def clear_table():
-    conn_str = f'mssql+pyodbc://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?driver=ODBC+Driver+17+for+SQL+Server'
+    conn_str = f'mssql+pyodbc://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?driver=ODBC+Driver+18+for+SQL+Server'
     engine = create_engine(conn_str)
     with engine.connect() as connection:
         clear_table_query = "TRUNCATE TABLE transformed_data;"
@@ -93,7 +93,7 @@ def load_data_to_sql(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='extract_and_transform_data', key='transformed_data')
     df = pd.DataFrame(transformed_data)
     
-    conn_str = f'mssql+pyodbc://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?driver=ODBC+Driver+17+for+SQL+Server'
+    conn_str = f'mssql+pyodbc://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?driver=ODBC+Driver+18+for+SQL+Server'
     engine = create_engine(conn_str)
     
     with engine.connect() as connection:
