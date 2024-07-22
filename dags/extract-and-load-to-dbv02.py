@@ -5,6 +5,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.hooks.base_hook import BaseHook
+import os
 
 # DAG Define
 default_args = {
@@ -21,6 +22,21 @@ dag = DAG(
     schedule_interval='0 12 * * *',  
     catchup=False,
 )
+
+def get_db_connection_string():
+    # Tutaj umieść kod dla connection stringa
+    user = os.getenv('DB_USER')
+    password = os.getenv('DB_PASSWORD')
+    host = os.getenv('DB_HOST')
+    port = os.getenv('DB_PORT')
+    database = os.getenv('DB_NAME')
+    
+    # Sprawdzanie, czy wszystkie zmienne środowiskowe są ustawione
+    if not all([user, password, host, port, database]):
+        raise ValueError("One or more environment variables are missing.")
+    
+    return f"mssql+pyodbc://{user}:{password}@{host}:{port}/{database}?driver=ODBC+Driver+18+for+SQL+Server"
+
 
 def extract_and_transform_data(**kwargs):
     url = "https://raw.githubusercontent.com/Kalinoszczak/Data/main/CSV/cars.csv"
@@ -50,20 +66,15 @@ def extract_and_transform_data(**kwargs):
     # Data transfer with XCom
     kwargs['ti'].xcom_push(key='transformed_data', value=df_sorted.to_dict())
 
-def get_db_connection_string():
-    conn = BaseHook.get_connection('azure_sql_server')
-    conn_str = f"mssql+pyodbc://{conn.login}:{conn.password}@{conn.host}:{conn.port}/{conn.schema}?driver=ODBC+Driver+18+for+SQL+Server"
-    return conn_str
-
 def create_table_if_not_exists():
     conn_str = get_db_connection_string()
     engine = create_engine(conn_str)
     
     try:
         with engine.connect() as connection:
-            # Sprawdzanie istnienia tabeli
-            check_table_query = """
-            IF OBJECT_ID('transformed_data', 'U') IS NULL
+            # Sprawdzanie istnienia tabeli i tworzenie jej, jeśli nie istnieje
+            create_table_query = """
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'transformed_data')
             BEGIN
                 CREATE TABLE transformed_data (
                     [Index] INT PRIMARY KEY,
@@ -79,12 +90,14 @@ def create_table_if_not_exists():
                 );
             END
             """
-            connection.execute(text(check_table_query))
+            # Wykonanie zapytania
+            connection.execute(text(create_table_query))
             print("Table created if it did not already exist.")
     except SQLAlchemyError as e:
-        # Log the exception message
+        # Logowanie wyjątku w przypadku błędu
         print(f"Error occurred while creating the table: {e}")
         raise
+
 
 def clear_table():
     conn_str = get_db_connection_string()
