@@ -5,7 +5,17 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.hooks.base_hook import BaseHook
+from dotenv import load_dotenv
 import os
+import pyodbc
+
+load_dotenv()
+
+user = os.getenv('DB_USER')
+password = os.getenv('DB_PASSWORD')
+host = os.getenv('DB_HOST')
+port = os.getenv('DB_PORT')
+database = os.getenv('DB_NAME')
 
 # DAG Define
 default_args = {
@@ -66,45 +76,53 @@ def extract_and_transform_data(**kwargs):
     # Data transfer with XCom
     kwargs['ti'].xcom_push(key='transformed_data', value=df_sorted.to_dict())
 
-def create_table_if_not_exists():
+def create_table():
     conn_str = get_db_connection_string()
-    engine = create_engine(conn_str)
+    engine = create_engine(conn_str, future=True)  # `future=True` to enable SQLAlchemy 2.0 behavior
     
     try:
         with engine.connect() as connection:
-            # Sprawdzanie istnienia tabeli i tworzenie jej, jeśli nie istnieje
             create_table_query = """
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'transformed_data')
-            BEGIN
-                CREATE TABLE transformed_data (
-                    [Index] INT PRIMARY KEY,
-                    [Price] FLOAT,
-                    [Year] INT,
-                    [Mileage] FLOAT,
-                    [Power] FLOAT,
-                    [Engine capacity] FLOAT,
-                    [Doors] FLOAT,
-                    [Price Category] VARCHAR(50),
-                    [Price/Power] FLOAT,
-                    [Price/Engine capacity] FLOAT
-                );
-            END
+            CREATE TABLE transformed_data (
+                [Index] INT PRIMARY KEY,
+                [Price] FLOAT,
+                [Year] INT,
+                [Mileage] FLOAT,
+                [Power] FLOAT,
+                [Engine capacity] FLOAT,
+                [Doors] FLOAT,
+                [Price Category] VARCHAR(50),
+                [Price/Power] FLOAT,
+                [Price/Engine capacity] FLOAT
+            );
             """
-            # Wykonanie zapytania
-            connection.execute(text(create_table_query))
-            print("Table created if it did not already exist.")
+            with connection.begin():  # Use a transaction context manager
+                connection.execute(text(create_table_query))
+            print("Table created successfully.")
     except SQLAlchemyError as e:
-        # Logowanie wyjątku w przypadku błędu
         print(f"Error occurred while creating the table: {e}")
         raise
 
 
-def clear_table():
+def clear_table(use_truncate=True):
     conn_str = get_db_connection_string()
-    engine = create_engine(conn_str)
-    with engine.connect() as connection:
-        clear_table_query = "DELETE TABLE transformed_data;"
-        connection.execute(text(clear_table_query))
+    engine = create_engine(conn_str, future=True)  # `future=True` to enable SQLAlchemy 2.0 behavior
+    
+    try:
+        with engine.connect() as connection:
+            if use_truncate:
+                # Wykonaj TRUNCATE TABLE dla tabeli 'transformed_data'
+                truncate_query = "TRUNCATE TABLE transformed_data;"
+                connection.execute(text(truncate_query))
+                print("Table 'transformed_data' truncated successfully.")
+            else:
+                # Wykonaj DELETE FROM dla tabeli 'transformed_data'
+                delete_query = "DELETE FROM transformed_data;"
+                connection.execute(text(delete_query))
+                print("Table 'transformed_data' cleared successfully.")
+    except SQLAlchemyError as e:
+        print(f"Error clearing table: {e}")
+        raise
 
 def load_data_to_sql(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='extract_and_transform_data', key='transformed_data')
@@ -126,7 +144,7 @@ extract_and_transform_task = PythonOperator(
 
 create_table_task = PythonOperator(
     task_id='create_table',
-    python_callable=create_table_if_not_exists,
+    python_callable=create_table,
     dag=dag,
 )
 
