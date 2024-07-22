@@ -1,5 +1,6 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
@@ -57,23 +58,33 @@ def get_db_connection_string():
 def create_table_if_not_exists():
     conn_str = get_db_connection_string()
     engine = create_engine(conn_str)
-    with engine.connect() as connection:
-        create_table_query = """
-        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='transformed_data' AND xtype='U')
-        CREATE TABLE transformed_data (
-            [Index] INT PRIMARY KEY,
-            [Price] FLOAT,
-            [Year] INT,
-            [Mileage] FLOAT,
-            [Power] FLOAT,
-            [Engine capacity] FLOAT,
-            [Doors] FLOAT,
-            [Price Category] VARCHAR(50),
-            [Price/Power] FLOAT,
-            [Price/Engine capacity] FLOAT
-        );
-        """
-        connection.execute(text(create_table_query))
+    
+    try:
+        with engine.connect() as connection:
+            # Sprawdzanie istnienia tabeli
+            check_table_query = """
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'transformed_data')
+            BEGIN
+                CREATE TABLE transformed_data (
+                    [Index] INT PRIMARY KEY,
+                    [Price] FLOAT,
+                    [Year] INT,
+                    [Mileage] FLOAT,
+                    [Power] FLOAT,
+                    [Engine capacity] FLOAT,
+                    [Doors] FLOAT,
+                    [Price Category] VARCHAR(50),
+                    [Price/Power] FLOAT,
+                    [Price/Engine capacity] FLOAT
+                );
+            END
+            """
+            connection.execute(text(check_table_query))
+            print("Table created if it did not already exist.")
+    except SQLAlchemyError as e:
+        # Log the exception message
+        print(f"Error occurred while creating the table: {e}")
+        raise
 
 def clear_table():
     conn_str = get_db_connection_string()
